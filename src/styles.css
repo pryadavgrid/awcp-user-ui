@@ -218,6 +218,26 @@ body {
 .tr-warn .tr-bar { stroke: var(--warn); }
 .tr-exhausted .tr-bar { stroke: var(--red); }
 
+/* Interactive ring: highlight on hover, reveal exact counts on click. */
+.tr-btn {
+  display: block; width: 30px; height: 30px; padding: 0; border: 0;
+  background: transparent; border-radius: 50%; cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.tr-btn:hover, .tr-btn:focus-visible {
+  background: var(--panel2); box-shadow: 0 0 0 2px var(--line2); outline: none;
+}
+.token-ring .tr-pop {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  z-index: 20; min-width: 170px; padding: 9px 11px;
+  background: var(--panel); border: 1px solid var(--line2); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.tr-pop-nums { font-size: 13px; color: var(--fg); white-space: nowrap; }
+.tr-pop-nums b { color: var(--acc); }
+.tr-pop-sub { font-size: 11.5px; color: var(--mut2); margin-top: 3px; }
+.tr-pop-note { font-size: 12px; color: var(--mut); line-height: 1.5; }
+
 /* ── Timeline / "thinking" indicator (used inside assistant turns) ─ */
 .think { display: flex; align-items: center; gap: 9px; min-height: 30px; font-size: 15px; color: var(--fg); }
 .think-text { font-weight: 500; }
