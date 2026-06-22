@@ -5,7 +5,8 @@ import ExportMenu from './ExportMenu.jsx'
 // returned. (Tools used / governed-writes details are intentionally not shown.)
 export default function ResultPanel({ status, onApprove, title }) {
   if (!status) return null
-  const { result, temporal_url, error, awaiting, status: s } = status
+  const { result, temporal_url, error, awaiting, status: s, blocked, blocked_reason, blocked_title } = status
+  const isBlocked = s === 'blocked' || blocked
 
   return (
     <div className="result-panel">
@@ -24,12 +25,25 @@ export default function ResultPanel({ status, onApprove, title }) {
         </div>
       )}
 
-      {error && <div className="err">{error}</div>}
-
-      {result ? (
-        <div className="result" dangerouslySetInnerHTML={{ __html: md(result) }} />
+      {isBlocked ? (
+        // The control plane blocked this task — show the ACCURATE source/reason
+        // (token budget vs agent-hooks vs other), never a hardcoded one.
+        <div className="blocked-msg">
+          <div className="blocked-title">{blocked_title || '⛔ Blocked by the Control Plane'}</div>
+          <div className="blocked-reason">
+            {blocked_reason || error ||
+              'An action this task needed was denied by the control plane, so no answer was produced.'}
+          </div>
+        </div>
       ) : (
-        <div className="muted">No result yet — it appears here when the agent finishes.</div>
+        <>
+          {error && <div className="err">{error}</div>}
+          {result ? (
+            <div className="result" dangerouslySetInnerHTML={{ __html: md(result) }} />
+          ) : (
+            <div className="muted">No result yet — it appears here when the agent finishes.</div>
+          )}
+        </>
       )}
 
       {(result || temporal_url) && (

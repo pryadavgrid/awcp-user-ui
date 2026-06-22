@@ -17,6 +17,18 @@ const PHRASES = {
 
 const TERMINAL = ['done', 'failed', 'blocked']
 
+// Roughly how "done" each pipeline stage is — used to drive the live % so it
+// reflects the step the agent is actually on (Thinking ≈ 30%, web search ≈ 55%,
+// …) while still creeping up between updates so it always feels real-time.
+const MILESTONES = {
+  setup: 12,
+  llm_called: 30,
+  web_search: 55,
+  tool_called: 72,
+  synthesize: 88,
+  complete: 96,
+}
+
 // The step the agent is currently on: the latest running/scheduled one, else the
 // most recent step. Returns its kind (e.g. "web_search") or null when no steps.
 function currentKind(items) {
@@ -25,6 +37,29 @@ function currentKind(items) {
     .reverse()
     .find((it) => it.status === 'running' || it.status === 'scheduled')
   return (inflight || items[items.length - 1]).kind
+}
+
+// A live completion % that eases toward the current stage's milestone, then
+// creeps slowly while the agent stays on that step — and snaps to 100 on done.
+// It never moves backward, so progress only ever climbs.
+function useProgress(active, kind, status) {
+  const [pct, setPct] = useState(0)
+  useEffect(() => {
+    if (status === 'done') {
+      setPct(100)
+      return
+    }
+    if (!active) return
+    const id = setInterval(() => {
+      setPct((p) => {
+        const target = (kind && MILESTONES[kind]) || 10
+        if (p < target) return Math.min(target, p + Math.max(0.6, (target - p) * 0.16))
+        return Math.min(95, p + 0.25) // still on this step → inch forward
+      })
+    }, 300)
+    return () => clearInterval(id)
+  }, [active, kind, status])
+  return Math.round(pct)
 }
 
 // Typewriter: reveal `text` one character at a time while `animate` is true.
@@ -52,9 +87,10 @@ export default function Timeline({ items, status }) {
   const kind = currentKind(items)
   const phrase = (kind && PHRASES[kind]) || (active ? 'Thinking' : '')
   const typed = useTypewriter(phrase, active)
+  const pct = useProgress(active, kind, status)
 
   if (!active) {
-    if (status === 'done') return <div className="think done">✓ Done</div>
+    if (status === 'done') return <div className="think done">✓ Done · 100%</div>
     if (status === 'failed') return <div className="think failed">✕ Couldn’t finish</div>
     if (status === 'blocked') return <div className="think failed">⛔ Blocked by the control plane</div>
     return <div className="think muted">Ready when you are.</div>
@@ -68,6 +104,7 @@ export default function Timeline({ items, status }) {
         <i />
         <i />
       </span>
+      <span className="think-pct mono">{pct}%</span>
     </div>
   )
 }

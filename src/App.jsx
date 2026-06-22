@@ -12,6 +12,7 @@ import {
 import Sidebar from './components/Sidebar.jsx'
 import Composer from './components/Composer.jsx'
 import ChatThread from './components/ChatThread.jsx'
+import { PanelIcon } from './components/icons.jsx'
 
 const TERMINAL = new Set(['done', 'failed', 'blocked'])
 const STORE_KEY = 'awcp.chats.v1'
@@ -89,7 +90,12 @@ export default function App() {
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState([])
   const [busy, setBusy] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Sidebar visibility is a plain toggle (menu button shows/hides it on every
+  // screen). Default: open on desktop, collapsed on narrow screens where it
+  // slides in as a drawer.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window === 'undefined' ? true : window.innerWidth > 860,
+  )
 
   // the task currently being polled → which message it writes into
   const [activeTask, setActiveTask] = useState(null)
@@ -223,17 +229,23 @@ export default function App() {
     return parts.join('\n\n')
   }
 
+  // On narrow screens the sidebar is a drawer — auto-close it after a chat
+  // action. On desktop it stays put (it's a persistent collapsible panel).
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 860) setSidebarOpen(false)
+  }
+
   // ── chat actions ─────────────────────────────────────────────────────────────
   const onNewChat = () => {
     setActiveChatId(null)
     setInput('')
     setAttachments([])
-    setSidebarOpen(false)
+    closeSidebarOnMobile()
   }
 
   const onSelectChat = (id) => {
     setActiveChatId(id)
-    setSidebarOpen(false)
+    closeSidebarOnMobile()
   }
 
   const onDeleteChat = (id) => {
@@ -317,6 +329,7 @@ export default function App() {
         onSelectChat={onSelectChat}
         onDeleteChat={onDeleteChat}
         open={sidebarOpen}
+        onToggle={() => setSidebarOpen((o) => !o)}
         onClose={() => setSidebarOpen(false)}
       />
 
@@ -325,10 +338,11 @@ export default function App() {
           <button
             type="button"
             className="hamburger"
-            aria-label="Toggle history"
+            aria-label="Toggle sidebar"
+            aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen((o) => !o)}
           >
-            ☰
+            <PanelIcon />
           </button>
           <span className="tb-title">AWCP User Interface</span>
           <span className="conn">
