@@ -43,6 +43,27 @@ export const getBudgets = () => call('GET', '/laminar/budgets')
 // token_budget, keyed by the same id the agent reports as `agent_id`.
 export const getRegistryAgents = () => call('GET', '/agents')
 
+// Upload an attached file to the gateway. Returns { path, name, size } — the
+// `path` is a gateway-local path the UI hands to file-aware agents (File
+// Inspector) via a `FILE_PATH:` token, so the agent opens the real bytes.
+export const uploadFile = async (file) => {
+  const fd = new FormData()
+  fd.append('file', file, file.name)
+  const res = await fetch(`${API}/user/upload`, { method: 'POST', body: fd })
+  const text = await res.text()
+  let data
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = text
+  }
+  if (!res.ok) {
+    const detail = data && data.detail !== undefined ? data.detail : data
+    throw new Error((typeof detail === 'string' ? detail : JSON.stringify(detail)) || `HTTP ${res.status}`)
+  }
+  return data
+}
+
 export const submitTask = (agent, input) =>
   call('POST', '/user/submit', { agent, input })
 

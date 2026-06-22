@@ -6,6 +6,7 @@ import {
   getBudgets,
   getRegistryAgents,
   submitTask,
+  uploadFile,
   getStatus,
   approveTask,
 } from './api.js'
@@ -196,20 +197,31 @@ export default function App() {
   const onAddFiles = async (fileList) => {
     const files = Array.from(fileList || [])
     const read = await Promise.all(
-      files.map(
-        (f) =>
-          new Promise((resolve) => {
-            const isText =
-              f.type.startsWith('text/') ||
-              /\.(txt|md|json|csv|ya?ml|js|jsx|ts|tsx|py|html?|css|log|xml|toml|ini|sh)$/i.test(f.name)
-            if (!isText) return resolve({ id: uid(), name: f.name, size: f.size, content: null })
+      files.map(async (f) => {
+        const isText =
+          f.type.startsWith('text/') ||
+          /\.(txt|md|json|csv|ya?ml|js|jsx|ts|tsx|py|html?|css|log|xml|toml|ini|sh)$/i.test(f.name)
+        // Inline readable text so text-only agents (LangGraph/CrewAI) still see
+        // the content — they can't open a path. Best-effort.
+        let content = null
+        if (isText) {
+          content = await new Promise((resolve) => {
             const r = new FileReader()
-            r.onload = () =>
-              resolve({ id: uid(), name: f.name, size: f.size, content: String(r.result || '').slice(0, MAX_FILE_CHARS) })
-            r.onerror = () => resolve({ id: uid(), name: f.name, size: f.size, content: null })
+            r.onload = () => resolve(String(r.result || '').slice(0, MAX_FILE_CHARS))
+            r.onerror = () => resolve(null)
             r.readAsText(f)
-          }),
-      ),
+          })
+        }
+        // Upload the real bytes so file-aware agents (File Inspector) can open the
+        // file by path — this is what makes images / PDFs / binaries work.
+        let path = null
+        try {
+          path = (await uploadFile(f)).path
+        } catch {
+          path = null
+        }
+        return { id: uid(), name: f.name, size: f.size, content, path }
+      }),
     )
     setAttachments((prev) => [...prev, ...read])
   }
@@ -220,12 +232,21 @@ export default function App() {
   // text), then the user's message.
   const buildInput = (text, atts) => {
     const parts = []
+    // 1) inline readable text so text-only agents see the content
     for (const f of atts) {
       if (f.content) parts.push(`--- attached file: ${f.name} ---\n${f.content}`)
     }
-    const names = atts.filter((f) => !f.content).map((f) => f.name)
-    if (names.length) parts.push(`[attached files: ${names.join(', ')}]`)
+    // 2) name-only note for files we could neither read nor upload
+    const orphan = atts.filter((f) => !f.content && !f.path).map((f) => f.name)
+    if (orphan.length) parts.push(`[attached files: ${orphan.join(', ')}]`)
+    // 3) the user's message
     if (text) parts.push(text)
+    // 4) real local paths LAST: a file-aware agent (File Inspector) opens the
+    //    bytes from FILE_PATH and treats the text BEFORE it as the request, so
+    //    these must trail the message to keep the user's question intact.
+    for (const f of atts) {
+      if (f.path) parts.push(`FILE_PATH: ${f.path}`)
+    }
     return parts.join('\n\n')
   }
 
