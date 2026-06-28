@@ -4,12 +4,16 @@ import ResultPanel from './ResultPanel.jsx'
 
 // Renders one conversation as a chat thread: user prompts on the right, agent
 // turns on the left. While an agent turn is still working we show the live
-// "thinking" indicator (Timeline); once it settles (or while awaiting approval)
-// we show the ResultPanel — final answer, tools used, governed writes, Temporal
-// link, and Approve/Deny. All of it comes from the per-message run state.
-const ACTIVE = new Set(['queued', 'pending', 'running'])
+// "thinking" indicator (Timeline); once it settles we show the ResultPanel —
+// final answer, Temporal link, etc. All of it comes from the per-message run state.
+//
+// `awaiting_approval` is treated as STILL WORKING here: a high-risk write is
+// waiting on an OPERATOR decision in the AWCP control-plane UI, not the end user.
+// So the user keeps seeing the normal progress indicator (no approval prompt) and
+// the answer simply appears once the operator approves and the run resumes.
+const ACTIVE = new Set(['queued', 'pending', 'running', 'awaiting_approval'])
 
-export default function ChatThread({ messages, onApprove }) {
+export default function ChatThread({ messages }) {
   const endRef = useRef(null)
   useEffect(() => {
     endRef.current && endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -41,7 +45,6 @@ export default function ChatThread({ messages, onApprove }) {
               ) : (
                 <ResultPanel
                   status={m.run}
-                  onApprove={onApprove}
                   title={(messages[i - 1] && messages[i - 1].text) || 'AWCP result'}
                 />
               )}

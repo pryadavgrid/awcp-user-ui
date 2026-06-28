@@ -8,14 +8,14 @@ import {
   submitTask,
   uploadFile,
   getStatus,
-  approveTask,
+  stopTask,
 } from './api.js'
 import Sidebar from './components/Sidebar.jsx'
 import Composer from './components/Composer.jsx'
 import ChatThread from './components/ChatThread.jsx'
 import { PanelIcon } from './components/icons.jsx'
 
-const TERMINAL = new Set(['done', 'failed', 'blocked'])
+const TERMINAL = new Set(['done', 'failed', 'blocked', 'canceled'])
 const STORE_KEY = 'awcp.chats.v1'
 const MAX_FILE_CHARS = 20000 // cap per-file text we inline into a prompt
 
@@ -331,13 +331,26 @@ export default function App() {
     }
   }
 
-  const onApprove = async (decision) => {
+  // Operator approval of high-risk writes is handled in the AWCP control-plane
+  // UI (the Approvals panel), NOT here — the end user never approves from chat.
+
+  // ── stop the in-flight task mid-run ─────────────────────────────────────────
+  // Cancels the Temporal workflow (gateway → saved on Temporal) and tells the
+  // agent to stop, then settles this message locally and frees the composer.
+  const onStop = async () => {
     const at = activeTaskRef.current
     if (!at) return
+    setActiveTask(null) // stop polling immediately so the composer frees up
+    patchRun(at.chatId, at.msgId, { status: 'canceled', stopped: true })
     try {
-      await approveTask(at.agent, at.task_id, decision)
+      await stopTask(at.agent, at.task_id, at.workflow_id)
     } catch (e) {
-      patchRun(at.chatId, at.msgId, { error: String(e.message || e) })
+      // The run is already stopped client-side; surface a soft note only.
+      patchRun(at.chatId, at.msgId, {
+        status: 'canceled',
+        stopped: true,
+        error: `Stopped (cancel request error: ${String(e.message || e)})`,
+      })
     }
   }
 
@@ -380,6 +393,7 @@ export default function App() {
                 input={input}
                 setInput={setInput}
                 onSend={onSend}
+                onStop={onStop}
                 agents={agents}
                 selectedId={selectedId}
                 onSelectAgent={setSelectedId}
@@ -396,13 +410,14 @@ export default function App() {
         ) : (
           <>
             <div className="thread-scroll">
-              <ChatThread messages={messages} onApprove={onApprove} />
+              <ChatThread messages={messages} />
             </div>
             <div className="composer-dock">
               <Composer
                 input={input}
                 setInput={setInput}
                 onSend={onSend}
+                onStop={onStop}
                 agents={agents}
                 selectedId={selectedId}
                 onSelectAgent={setSelectedId}

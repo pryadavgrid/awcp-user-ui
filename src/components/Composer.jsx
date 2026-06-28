@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import AgentMenu from './AgentMenu.jsx'
 import TokenRing from './TokenRing.jsx'
 
@@ -11,6 +11,7 @@ export default function Composer({
   input,
   setInput,
   onSend,
+  onStop,
   agents,
   selectedId,
   onSelectAgent,
@@ -33,6 +34,12 @@ export default function Composer({
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 220) + 'px'
   }
+
+  // Re-sync the height whenever the controlled value changes — including when
+  // the parent clears it after sending, so the box snaps back to one row.
+  useEffect(() => {
+    autosize(taRef.current)
+  }, [input])
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -72,7 +79,10 @@ export default function Composer({
 
       <div className="composer-bar">
         <div className="cb-left">
-          <AgentMenu agents={agents} selectedId={selectedId} onSelect={onSelectAgent} disabled={blocked} />
+          {/* The agent selector stays usable even while a task runs (it only
+              picks the agent for the NEXT message) — it's disabled only when the
+              gateway is unreachable, so the picker is never stuck. */}
+          <AgentMenu agents={agents} selectedId={selectedId} onSelect={onSelectAgent} disabled={disabled} />
           <TokenRing
             usage={tokenInfo.info}
             pending={tokenInfo.pending}
@@ -100,15 +110,27 @@ export default function Composer({
           >
             +
           </button>
-          <button
-            type="button"
-            className="icon-btn send"
-            title="Send (Enter)"
-            disabled={!canSend}
-            onClick={onSend}
-          >
-            {busy ? <span className="spinner sm" /> : '↑'}
-          </button>
+          {running ? (
+            <button
+              type="button"
+              className="icon-btn stop"
+              title="Stop execution"
+              onClick={onStop}
+              aria-label="Stop execution"
+            >
+              ■
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="icon-btn send"
+              title="Send (Enter)"
+              disabled={!canSend}
+              onClick={onSend}
+            >
+              {busy ? <span className="spinner sm" /> : '↑'}
+            </button>
+          )}
         </div>
       </div>
 

@@ -231,6 +231,8 @@ body {
 .icon-btn.plus:hover:not(:disabled) { background: var(--line); }
 .icon-btn.send { background: var(--acc); border-color: var(--acc); color: var(--acc-fg); font-size: 17px; }
 .icon-btn.send:hover:not(:disabled) { filter: brightness(1.08); }
+.icon-btn.stop { background: #ef4444; border-color: #ef4444; color: #fff; font-size: 13px; }
+.icon-btn.stop:hover:not(:disabled) { filter: brightness(1.08); }
 .icon-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Agent menu ──────────────────────────────────────────── */

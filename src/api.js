@@ -80,3 +80,13 @@ export const approveTask = (agent, taskId, decision) =>
     `/user/approve/${encodeURIComponent(agent)}/${encodeURIComponent(taskId)}`,
     { decision },
   )
+
+// Stop a running task mid-execution. The gateway cancels its Temporal workflow
+// (recorded in Temporal history) and tells the agent to stop. workflowId is the
+// dynamic id from submit — passed through so nothing is reconstructed/hardcoded.
+export const stopTask = (agent, taskId, workflowId) =>
+  call(
+    'POST',
+    `/user/stop/${encodeURIComponent(agent)}/${encodeURIComponent(taskId)}` +
+      (workflowId ? `?workflow_id=${encodeURIComponent(workflowId)}` : ''),
+  )
