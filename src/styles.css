@@ -161,9 +161,14 @@ body {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 26px; padding: 24px 20px 64px; overflow-y: auto;
 }
-.hero-title {
-  font: 400 clamp(30px, 5vw, 46px)/1.15 Georgia, "Times New Roman", serif;
-  margin: 0; text-align: center; letter-spacing: 0.2px;
+.hero-logo {
+  display: block;
+  width: min(620px, 88vw);
+  height: auto;          /* keep aspect ratio — never cut or squashed */
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;  /* its transparent lower part may overlap the box */
+  margin-bottom: -48px;  /* let that overlap happen without pushing it down */
 }
 .hero-composer { width: 100%; max-width: 760px; }
 

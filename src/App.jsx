@@ -14,16 +14,11 @@ import Sidebar from './components/Sidebar.jsx'
 import Composer from './components/Composer.jsx'
 import ChatThread from './components/ChatThread.jsx'
 import { PanelIcon } from './components/icons.jsx'
+import logoUrl from './img/awcp_user_ui_logo.png'
 
 const TERMINAL = new Set(['done', 'failed', 'blocked', 'canceled'])
 const STORE_KEY = 'awcp.chats.v1'
 const MAX_FILE_CHARS = 20000 // cap per-file text we inline into a prompt
-
-// The big greeting. Defaults to "Namaste 🙏"; if a user name is ever provided
-// (e.g. from auth later) it's woven in automatically — not hardcoded per-user.
-function greetingFor(userName) {
-  return userName ? `Hii, ${userName}` : 'Agent Interface'
-}
 
 // ── token budget resolution (same precedence laminar uses) ───────────────────
 function resolveBudget(entry, budgets) {
@@ -387,7 +382,7 @@ export default function App() {
 
         {showHero ? (
           <div className="hero-wrap">
-            <h1 className="hero-title">{greetingFor(null)}</h1>
+            <img className="hero-logo" src={logoUrl} alt="Agent Interface" />
             <div className="hero-composer">
               <Composer
                 input={input}
