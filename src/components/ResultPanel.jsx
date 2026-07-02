@@ -19,12 +19,19 @@ export default function ResultPanel({ status, title }) {
     <div className="result-panel">
       {isStopped ? (
         // The user stopped this run — the gateway cancelled its Temporal workflow.
-        <div className="blocked-msg">
-          <div className="blocked-title">■ Stopped</div>
-          <div className="blocked-reason">
-            {error || 'You stopped this run. Its workflow was cancelled in Temporal.'}
+        // The agent still settles with whatever output it produced, so show that
+        // below the notice (Temporal shows it too) rather than hiding it.
+        <>
+          <div className="blocked-msg">
+            <div className="blocked-title">■ Stopped</div>
+            <div className="blocked-reason">
+              {error || 'You stopped this run. Its workflow was cancelled in Temporal.'}
+            </div>
           </div>
-        </div>
+          {result && (
+            <div className="result" dangerouslySetInnerHTML={{ __html: md(result) }} />
+          )}
+        </>
       ) : isBlocked ? (
         // The control plane blocked this task — show the ACCURATE source/reason
         // (token budget vs agent-hooks vs other), never a hardcoded one.

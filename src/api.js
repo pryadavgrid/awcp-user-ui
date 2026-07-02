@@ -64,8 +64,15 @@ export const uploadFile = async (file) => {
   return data
 }
 
-export const submitTask = (agent, input) =>
-  call('POST', '/user/submit', { agent, input })
+export const submitTask = (agent, input, session) =>
+  call('POST', '/user/submit', { agent, input, session })
+
+// Per-chat context-window meter + prior turns. `session` is the chat id. Returns
+// { enabled, used_tokens, context_window, used_pct, remaining_tokens,
+//   remaining_pct, turns, ... }. Used for the inline context-window indicator.
+// limit=1 keeps the payload tiny — the token totals are whole-session aggregates.
+export const getChatContext = (session) =>
+  call('GET', `/user/chat/history/${encodeURIComponent(session)}?limit=1`)
 
 export const getStatus = (agent, taskId, workflowId) =>
   call(

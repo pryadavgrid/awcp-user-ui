@@ -9,6 +9,7 @@ import {
   uploadFile,
   getStatus,
   stopTask,
+  getChatContext,
 } from './api.js'
 import Sidebar from './components/Sidebar.jsx'
 import Composer from './components/Composer.jsx'
@@ -98,6 +99,10 @@ export default function App() {
   const activeTaskRef = useRef(null)
   activeTaskRef.current = activeTask
 
+  // Per-chat context-window meter (Σ tokens for this chat vs the model window),
+  // read from the gateway keyed on the chat id (= session id).
+  const [contextInfo, setContextInfo] = useState(null)
+
   const selected = agents.find((a) => a.id === selectedId) || null
   const currentChat = chats.find((c) => c.id === activeChatId) || null
   const messages = currentChat ? currentChat.messages : []
@@ -174,6 +179,11 @@ export default function App() {
         getUsage().then((u) => alive && u && setUsage(u)).catch(() => {})
         if (TERMINAL.has(s.status)) {
           setActiveTask(null)
+          // The turn was just persisted — refresh the context meter now instead
+          // of waiting for the next 4s tick.
+          getChatContext(activeTask.chatId)
+            .then((c) => alive && setContextInfo(c && c.enabled === false ? null : c))
+            .catch(() => {})
           return
         }
       } catch {
@@ -187,6 +197,28 @@ export default function App() {
       clearTimeout(timer)
     }
   }, [activeTask])
+
+  // ── per-chat context-window meter ───────────────────────────────────────────
+  // Poll the gateway for this chat's Σ tokens vs the model window. Keyed on the
+  // chat id (= session id); reset when no chat is open. The 4s tick catches the
+  // update after each turn is persisted.
+  useEffect(() => {
+    if (!activeChatId) {
+      setContextInfo(null)
+      return
+    }
+    let alive = true
+    const tick = () =>
+      getChatContext(activeChatId)
+        .then((c) => alive && setContextInfo(c && c.enabled === false ? null : c))
+        .catch(() => {})
+    tick()
+    const t = setInterval(tick, 4000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [activeChatId])
 
   // ── file attachments ────────────────────────────────────────────────────────
   const onAddFiles = async (fileList) => {
@@ -306,7 +338,10 @@ export default function App() {
     setBusy(true)
 
     try {
-      const t = await submitTask(selectedId, buildInput(text, atts))
+      // The chat id doubles as the session id — this is what gives the agent
+      // per-chat context memory (it reads prior turns of this session) and keeps
+      // the run history + context-window meter grouped by conversation.
+      const t = await submitTask(selectedId, buildInput(text, atts), chatId)
       patchRun(chatId, asstMsg.id, {
         status: t.status || 'queued',
         temporal_url: t.temporal_url,
@@ -335,7 +370,7 @@ export default function App() {
   const onStop = async () => {
     const at = activeTaskRef.current
     if (!at) return
-    setActiveTask(null) // stop polling immediately so the composer frees up
+    setActiveTask(null) // stop the main poll immediately so the composer frees up
     patchRun(at.chatId, at.msgId, { status: 'canceled', stopped: true })
     try {
       await stopTask(at.agent, at.task_id, at.workflow_id)
@@ -347,6 +382,33 @@ export default function App() {
         error: `Stopped (cancel request error: ${String(e.message || e)})`,
       })
     }
+
+    // The in-flight LLM call can't be force-killed, so the agent settles the run
+    // as canceled WITH whatever output it produced (Temporal shows it too). Poll a
+    // few times to capture that output and merge it into this message — keeping the
+    // Stopped state — so the user sees the result instead of an empty "Stopped".
+    let tries = 0
+    const grab = async () => {
+      tries += 1
+      try {
+        const s = await getStatus(at.agent, at.task_id, at.workflow_id)
+        if (s && s.result) {
+          patchRun(at.chatId, at.msgId, {
+            status: 'canceled',
+            stopped: true,
+            result: s.result,
+            timeline: s.timeline,
+            temporal_url: s.temporal_url,
+          })
+          getChatContext(at.chatId).then((c) => setContextInfo(c && c.enabled === false ? null : c)).catch(() => {})
+          return // got the output — done
+        }
+      } catch {
+        /* transient — keep trying */
+      }
+      if (tries < 12) setTimeout(grab, 1500)
+    }
+    setTimeout(grab, 1000)
   }
 
   return (
@@ -399,6 +461,7 @@ export default function App() {
                 busy={busy}
                 running={running}
                 disabled={backendOk === false}
+                contextInfo={contextInfo}
               />
             </div>
           </div>
@@ -423,6 +486,7 @@ export default function App() {
                 busy={busy}
                 running={running}
                 disabled={backendOk === false}
+                contextInfo={contextInfo}
               />
             </div>
           </>

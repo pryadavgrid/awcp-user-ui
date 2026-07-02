@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import AgentMenu from './AgentMenu.jsx'
 import TokenRing from './TokenRing.jsx'
+import ContextBar from './ContextBar.jsx'
 
 // The chat composer (Claude-style box):
 //   • a growing textarea,
@@ -22,6 +23,7 @@ export default function Composer({
   busy,
   running,
   disabled,
+  contextInfo,
 }) {
   const fileRef = useRef(null)
   const taRef = useRef(null)
@@ -88,6 +90,9 @@ export default function Composer({
             pending={tokenInfo.pending}
             agentName={(agents.find((a) => a.id === selectedId) || {}).name}
           />
+          {/* Inline context-window meter for the open chat — beside the token
+              ring, shown in a line (not a circle). */}
+          <ContextBar ctx={contextInfo} />
         </div>
 
         <div className="cb-right">

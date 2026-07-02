@@ -302,6 +302,29 @@ body {
 .tr-pop-sub { font-size: 11.5px; color: var(--mut2); margin-top: 3px; }
 .tr-pop-note { font-size: 12px; color: var(--mut); line-height: 1.5; }
 
+/* ── Inline context-window meter (per chat) — beside the token ring ─ */
+.ctxbar {
+  display: flex; align-items: center; gap: 7px; height: 24px; padding: 0 10px;
+  min-width: 0; border: 1px solid var(--line2); border-radius: 999px;
+  background: var(--panel2); font-size: 11.5px; color: var(--mut);
+  white-space: nowrap; overflow: hidden;
+}
+.ctxbar .cx-lbl { color: var(--mut2); font-weight: 600; flex: none; }
+.ctxbar .cx-track {
+  width: 56px; height: 5px; border-radius: 999px; background: var(--line);
+  overflow: hidden; flex: none;
+}
+.ctxbar .cx-track > i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--acc); transition: width 0.5s ease;
+}
+.ctxbar .cx-nums { color: var(--mut); overflow: hidden; text-overflow: ellipsis; }
+.ctxbar .cx-nums b { color: var(--fg); }
+.cx-warn .cx-track > i { background: var(--warn); }
+.cx-exhausted .cx-track > i { background: var(--red); }
+.cx-exhausted .cx-nums b { color: var(--red); }
+@media (max-width: 560px) { .ctxbar .cx-lbl { display: none; } }
+
 /* ── Timeline / "thinking" indicator (used inside assistant turns) ─ */
 .think { display: flex; align-items: center; gap: 9px; min-height: 30px; font-size: 15px; color: var(--fg); }
 .think-text { font-weight: 500; }
