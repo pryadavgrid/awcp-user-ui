@@ -10,46 +10,21 @@ import {
   getStatus,
   stopTask,
   getChatContext,
+  startAgent,
+  stopAgent,
 } from './api.js'
 import Sidebar from './components/Sidebar.jsx'
 import Composer from './components/Composer.jsx'
 import ChatThread from './components/ChatThread.jsx'
-import { PanelIcon } from './components/icons.jsx'
-import logoUrl from './img/awcp_user_ui_logo.png'
+import WelcomeCard from './components/WelcomeCard.jsx'
+import SettingsPanel from './components/SettingsPanel.jsx'
+import { PanelIcon, CATEGORY_ICONS } from './components/icons.jsx'
+import { categoryLabel } from './categorize.js'
+import { tokenInfoFor } from './tokens.js'
 
 const TERMINAL = new Set(['done', 'failed', 'blocked', 'canceled'])
 const STORE_KEY = 'awcp.chats.v1'
 const MAX_FILE_CHARS = 20000 // cap per-file text we inline into a prompt
-
-// ── token budget resolution (same precedence laminar uses) ───────────────────
-function resolveBudget(entry, budgets) {
-  if (!entry) return 0
-  const ov = (budgets.overrides || {})[entry.id]
-  if (ov && ov > 0) return ov
-  if (entry.token_budget && entry.token_budget > 0) return entry.token_budget
-  const tier = (budgets.risk_defaults || {})[entry.risk]
-  return tier || budgets.system_default || 0
-}
-
-// The token-ring view for the selected agent: a live usage row, or its resolved
-// budget (0 used) if registered but unspent, or a "not started" placeholder.
-function tokenInfoFor(selected, usage, regAgents, budgets) {
-  if (!selected) return { info: null, pending: true }
-  const aid = selected.agent_id
-  if (!aid) return { info: null, pending: true }
-  const row = usage.find((u) => u.agent_id && u.agent_id === aid)
-  if (row && row.budget) return { info: row, pending: false }
-  const entry = regAgents.find((r) => r.id === aid)
-  const budget = entry ? resolveBudget(entry, budgets) : budgets.system_default || 0
-  return {
-    info: {
-      agent_id: aid,
-      budget: { used_tokens: 0, budget_tokens: budget, ratio: 0, state: 'ok' },
-      window: { total_tokens: 0, calls: 0 },
-    },
-    pending: false,
-  }
-}
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const titleFrom = (text) => {
@@ -82,6 +57,14 @@ export default function App() {
     const c = loadChats()
     return c[0] ? c[0].id : null
   })
+  // Which sidebar topic ("all" or a category id) is selected. Lifted here so the
+  // workspace header can name the active section.
+  const [activeCat, setActiveCat] = useState('all')
+
+  // settings panel (per-agent tokens + start/stop toggles)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [togglingId, setTogglingId] = useState(null) // agent id mid start/stop
+  const [toggleError, setToggleError] = useState('') // last start/stop failure
 
   // composer state
   const [input, setInput] = useState('')
@@ -286,6 +269,7 @@ export default function App() {
   // ── chat actions ─────────────────────────────────────────────────────────────
   const onNewChat = () => {
     setActiveChatId(null)
+    setActiveCat('all') // clear any topic filter so the new chat is never hidden
     setInput('')
     setAttachments([])
     closeSidebarOnMobile()
@@ -299,6 +283,31 @@ export default function App() {
   const onDeleteChat = (id) => {
     setChats((prev) => prev.filter((c) => c.id !== id))
     if (activeChatId === id) setActiveChatId(null)
+  }
+
+  // ── start/stop an agent from the settings panel ─────────────────────────────
+  // Routes through the control panel (control_panel.py) — start when stopped, stop
+  // when running. We flip the running state optimistically; the 5s agent-list
+  // refresh confirms the real state (or reverts it if the control panel didn't
+  // actually change it). start() takes ~1–2s to come up, so the poll catches it.
+  const onToggleAgent = async (agentId) => {
+    if (togglingId) return
+    const agent = agents.find((a) => a.id === agentId)
+    const wasRunning = !!(agent && agent.running)
+    setTogglingId(agentId)
+    setToggleError('')
+    try {
+      if (wasRunning) await stopAgent(agentId)
+      else await startAgent(agentId)
+      setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, running: !wasRunning } : a)))
+    } catch {
+      setToggleError(
+        `Couldn’t ${wasRunning ? 'stop' : 'start'} “${(agent && agent.name) || agentId}”. ` +
+          `Is the gateway reachable at ${API_BASE}?`,
+      )
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   const onSend = async () => {
@@ -419,6 +428,9 @@ export default function App() {
         onNewChat={onNewChat}
         onSelectChat={onSelectChat}
         onDeleteChat={onDeleteChat}
+        activeCat={activeCat}
+        onSelectCategory={setActiveCat}
+        onOpenSettings={() => setSettingsOpen(true)}
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((o) => !o)}
         onClose={() => setSidebarOpen(false)}
@@ -435,7 +447,17 @@ export default function App() {
           >
             <PanelIcon />
           </button>
-          <span className="tb-title">AWCP User Interface</span>
+          <span className="tb-title">{currentChat ? currentChat.title : 'New chat'}</span>
+          {activeCat !== 'all' &&
+            (() => {
+              const CatIcon = CATEGORY_ICONS[activeCat] || CATEGORY_ICONS.other
+              return (
+                <span className="tb-section" title={`Showing the ${categoryLabel(activeCat)} section`}>
+                  <CatIcon />
+                  {categoryLabel(activeCat)}
+                </span>
+              )
+            })()}
           <span className="conn">
             <span className={`dot ${backendOk ? 'on' : backendOk === false ? 'off' : ''}`} />
             <span className="mono conn-url">{API_BASE}</span>
@@ -444,7 +466,7 @@ export default function App() {
 
         {showHero ? (
           <div className="hero-wrap">
-            <img className="hero-logo" src={logoUrl} alt="Agent Interface" />
+            <WelcomeCard onPick={setInput} disabled={backendOk === false} />
             <div className="hero-composer">
               <Composer
                 input={input}
@@ -492,6 +514,19 @@ export default function App() {
           </>
         )}
       </div>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        agents={agents}
+        usage={usage}
+        regAgents={regAgents}
+        budgets={budgets}
+        onToggleAgent={onToggleAgent}
+        togglingId={togglingId}
+        toggleError={toggleError}
+        backendOk={backendOk}
+      />
     </div>
   )
 }

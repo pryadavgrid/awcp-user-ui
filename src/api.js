@@ -4,8 +4,8 @@
 
 const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
-async function call(method, path, body) {
-  const res = await fetch(`${API}${path}`, {
+async function request(base, method, path, body) {
+  const res = await fetch(`${base}${path}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -25,9 +25,18 @@ async function call(method, path, body) {
   return data
 }
 
+const call = (method, path, body) => request(API, method, path, body)
+
 export const API_BASE = API
 
 export const listAgents = () => call('GET', '/user/agents')
+
+// Start/stop an agent's runtime process via the gateway itself — always-on and the
+// same origin as every other call, so no separate control panel is needed. `id` is
+// the value GET /user/agents returns. Each returns { ok, running, message }; a 404
+// ("unknown agent") throws.
+export const startAgent = (id) => call('POST', `/user/agents/${encodeURIComponent(id)}/start`)
+export const stopAgent = (id) => call('POST', `/user/agents/${encodeURIComponent(id)}/stop`)
 
 // Per-agent token usage + budget (the token monitor feed). Optional: returns []
 // when the laminar module isn't mounted or no agent has reported usage yet — so
