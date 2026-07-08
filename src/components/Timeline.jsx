@@ -1,33 +1,23 @@
 import { useEffect, useState } from 'react'
 
-// Instead of listing raw governed steps (llm_called, tool_call, …), show ONE
-// friendly line that types itself out — "Thinking…", "Searching the web…",
-// "Analysing…" — like a chat assistant working. The phrase is driven by the
-// step the agent is currently on (read from the Temporal timeline), so it still
-// reflects what's really happening; it's just shown in plain language.
+// Instead of a raw list of governed steps (llm_called, tool_call, …) or a fake
+// percentage, show ONE plain-language line that says what the agent is REALLY
+// doing right now — "Searching the web", "Waiting for approval", "Generating the
+// final answer". The line is driven by the step the agent is currently on (read
+// from the Temporal timeline) and the run's own status, so it always reflects
+// reality; we just phrase it for a person and skip the noise of every tool call.
 
 const PHRASES = {
   setup: 'Getting started',
   llm_called: 'Thinking',
   web_search: 'Searching the web',
   tool_called: 'Working on it',
-  synthesize: 'Analysing',
-  complete: 'Wrapping up',
+  synthesize: 'Generating the final answer',
+  complete: 'Finishing up',
 }
 
+// Run-level states that mean "no longer working" — everything else is live.
 const TERMINAL = ['done', 'failed', 'blocked']
-
-// Roughly how "done" each pipeline stage is — used to drive the live % so it
-// reflects the step the agent is actually on (Thinking ≈ 30%, web search ≈ 55%,
-// …) while still creeping up between updates so it always feels real-time.
-const MILESTONES = {
-  setup: 12,
-  llm_called: 30,
-  web_search: 55,
-  tool_called: 72,
-  synthesize: 88,
-  complete: 96,
-}
 
 // The step the agent is currently on: the latest running/scheduled one, else the
 // most recent step. Returns its kind (e.g. "web_search") or null when no steps.
@@ -39,30 +29,20 @@ function currentKind(items) {
   return (inflight || items[items.length - 1]).kind
 }
 
-// A live completion % that eases toward the current stage's milestone, then
-// creeps slowly while the agent stays on that step — and snaps to 100 on done.
-// It never moves backward, so progress only ever climbs.
-function useProgress(active, kind, status) {
-  const [pct, setPct] = useState(0)
-  useEffect(() => {
-    if (status === 'done') {
-      setPct(100)
-      return
-    }
-    if (!active) return
-    const id = setInterval(() => {
-      setPct((p) => {
-        const target = (kind && MILESTONES[kind]) || 10
-        if (p < target) return Math.min(target, p + Math.max(0.6, (target - p) * 0.16))
-        return Math.min(95, p + 0.25) // still on this step → inch forward
-      })
-    }, 300)
-    return () => clearInterval(id)
-  }, [active, kind, status])
-  return Math.round(pct)
+// Turn the run status + current step into the single friendly phrase to show.
+// A run-level state the user cares about (waiting on an approval) wins over
+// whatever tool step happens to be in flight.
+function phraseFor(status, items) {
+  if (status === 'awaiting_approval') return 'Waiting for approval'
+  const kind = currentKind(items)
+  if (kind && PHRASES[kind]) return PHRASES[kind]
+  // No steps yet (queued/pending) or an unknown tool → stay high-level on
+  // purpose. We never surface raw tool names — just that it's actively working.
+  return items && items.length ? 'Working on it' : 'Getting started'
 }
 
-// Typewriter: reveal `text` one character at a time while `animate` is true.
+// Typewriter: reveal `text` one character at a time while `animate` is true, and
+// re-type whenever the phrase changes — so each new stage visibly "arrives".
 function useTypewriter(text, animate) {
   const [shown, setShown] = useState(animate ? '' : text)
   useEffect(() => {
@@ -84,27 +64,25 @@ function useTypewriter(text, animate) {
 
 export default function Timeline({ items, status }) {
   const active = status && !TERMINAL.includes(status)
-  const kind = currentKind(items)
-  const phrase = (kind && PHRASES[kind]) || (active ? 'Thinking' : '')
+  const waiting = status === 'awaiting_approval'
+  const phrase = active ? phraseFor(status, items) : ''
   const typed = useTypewriter(phrase, active)
-  const pct = useProgress(active, kind, status)
 
   if (!active) {
-    if (status === 'done') return <div className="think done">✓ Done · 100%</div>
+    if (status === 'done') return <div className="think done">✓ Done</div>
     if (status === 'failed') return <div className="think failed">✕ Couldn’t finish</div>
     if (status === 'blocked') return <div className="think failed">⛔ Blocked by the control plane</div>
     return <div className="think muted">Ready when you are.</div>
   }
 
   return (
-    <div className="think" aria-live="polite">
+    <div className={`think${waiting ? ' waiting' : ''}`} aria-live="polite">
       <span className="think-text">{typed}</span>
       <span className="think-dots" aria-hidden="true">
         <i />
         <i />
         <i />
       </span>
-      <span className="think-pct mono">{pct}%</span>
     </div>
   )
 }

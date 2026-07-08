@@ -9,8 +9,8 @@ import ResultPanel from './ResultPanel.jsx'
 //
 // `awaiting_approval` is treated as STILL WORKING here: a high-risk write is
 // waiting on an OPERATOR decision in the AWCP control-plane UI, not the end user.
-// So the user keeps seeing the normal progress indicator (no approval prompt) and
-// the answer simply appears once the operator approves and the run resumes.
+// The live indicator says "Waiting for approval" (no approval button — the end
+// user can't decide) and the answer appears once the operator approves and resumes.
 const ACTIVE = new Set(['queued', 'pending', 'running', 'awaiting_approval'])
 
 export default function ChatThread({ messages }) {
