@@ -121,7 +121,7 @@ export default function Sidebar({
             title="AWCP"
             aria-label="Toggle sidebar"
           >
-            AWCP
+            Ai
           </button>
 
           <div className="cat-scroll">
